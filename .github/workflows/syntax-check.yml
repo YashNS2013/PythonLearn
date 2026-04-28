@@ -17,29 +17,32 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Find all Python files
-        id: find-py
-        run: |
-          echo "files=$(find . -name '*.py' -type f ! -path './.git/*' | tr '\n' ' ')" >> $GITHUB_OUTPUT
-
       - name: Check Python syntax
         run: |
-          ERROR_COUNT=0
-          declare -a ERROR_FILES=()
+          python3 << 'EOF'
+          import subprocess
+          import sys
 
-          for file in ${{ steps.find-py.outputs.files }}; do
-            if ! python3 -m py_compile "$file" 2>&1; then
-              ERROR_FILES+=("$file")
-              ((ERROR_COUNT++))
-            fi
-          done
+          result = subprocess.run(
+              ['find', '.', '-name', '*.py', '-type', 'f', '!', '-path', './.git/*'],
+              capture_output=True, text=True
+          )
+          files = result.stdout.strip().split('\n')
+          errors = []
 
-          if [ $ERROR_COUNT -gt 0 ]; then
-            echo "❌ Syntax errors found in $ERROR_COUNT file(s):"
-            for f in "${ERROR_FILES[@]}"; do
-              echo "  - $f"
-            done
-            exit 1
-          else
-            echo "✅ All Python files passed syntax check"
-          fi
+          for filepath in files:
+              ret = subprocess.run(
+                  ['python3', '-m', 'py_compile', filepath],
+                  capture_output=True, text=True
+              )
+              if ret.returncode != 0:
+                  errors.append(filepath)
+
+          if errors:
+              print(f"❌ Syntax errors found in {len(errors)} file(s):")
+              for f in errors:
+                  print(f"  - {f}")
+              sys.exit(1)
+          else:
+              print("✅ All Python files passed syntax check")
+          EOF
